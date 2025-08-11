@@ -21,7 +21,9 @@ TINY_STORIES_VALID_PATH = DATA_PATH / "TinyStoriesV2-GPT4-valid.txt"
 TINY_STORIES_VALID_TOKENIZED_PATH = DATA_PATH / "TinyStoriesV2-GPT4-valid-tokenized.npy"
 
 OWT_TRAIN_PATH = DATA_PATH / "owt_train.txt"
+OWT_TRAIN_TOKENIZED_PATH = DATA_PATH / "owt_train-tokenized.npy"
 OWT_VALID_PATH = DATA_PATH / "owt_valid.txt"
+OWT_VALID_TOKENIZED_PATH = DATA_PATH / "owt_valid-tokenized.npy"
 
 
 def sample_ten_documents(
@@ -83,5 +85,8 @@ if __name__ == '__main__':
 
     # sample_runs(tiny_stories_tokenizer, owt_tokenizer)
 
-    tokenize_dataset(TINY_STORIES_VALID_PATH, TINY_STORIES_VALID_TOKENIZED_PATH, tiny_stories_tokenizer)
-    tokenize_dataset(TINY_STORIES_TRAIN_PATH, TINY_STORIES_TRAIN_TOKENIZED_PATH, tiny_stories_tokenizer)
+    # tokenize_dataset(TINY_STORIES_VALID_PATH, TINY_STORIES_VALID_TOKENIZED_PATH, tiny_stories_tokenizer)
+    # tokenize_dataset(TINY_STORIES_TRAIN_PATH, TINY_STORIES_TRAIN_TOKENIZED_PATH, tiny_stories_tokenizer)
+
+    tokenize_dataset(OWT_VALID_PATH, OWT_VALID_TOKENIZED_PATH, owt_tokenizer)
+    tokenize_dataset(OWT_TRAIN_PATH, OWT_TRAIN_TOKENIZED_PATH, owt_tokenizer)

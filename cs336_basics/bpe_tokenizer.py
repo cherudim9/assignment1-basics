@@ -1,4 +1,3 @@
-from cs336_basics.bpe import Bpe
 from collections.abc import Iterable, Iterator
 from cs336_basics.pretokenization import PRETOKENIZATION_PATTERN
 import ast
@@ -49,12 +48,8 @@ class BpeTokenizer:
         def __init__(
             self,
             value: int,
-            is_token_start: bool = False,
-            is_token_end: bool = False,
         ):
             self.value = value
-            self.is_token_start = is_token_start
-            self.is_token_end = is_token_end
             self.next = None
             self.prev = None
 
@@ -73,53 +68,31 @@ class BpeTokenizer:
                 return self.p1 == other.p1 and self.p2 == other.p2
 
 
-    def encode(self, text: str) -> list[int]:
-        if self.special_tokens:
-            chunks_splitted = re.split('(' + '|'.join(map(re.escape, self.special_tokens)) + ')', text)
-        else:
-            chunks_splitted = [text]
-
-        first_pointer  = None
+    def encode_pretoken_set(
+        self,
+        pretoken_list: list[str],
+    ) -> dict[str, list[int]]:
         pair_sets = {}
-        last_end_pointer = None
-        for chunk in chunks_splitted:
-            if self.special_tokens and chunk in self.special_tokens:
-                # no merge inside each special token.
-                p = self.BytePointer(self.vocab_index[chunk.encode('utf-8')], is_token_start = True, is_token_end = True)
-                if last_end_pointer:
-                    last_end_pointer.next = p
-                    p.prev = last_end_pointer
-                last_end_pointer = p
-                if not first_pointer:
-                    first_pointer = p
-            else:
-                # firstly do the pretokenization.
-                for pretoken in re.finditer(PRETOKENIZATION_PATTERN, chunk):
-                    if len(pretoken) == 0:
-                        continue
-                    pretoken_bytes = pretoken.group(0).encode('utf_8')
+        pretoken_pointers = []
+        for pretoken in pretoken_list:
+            pretoken_bytes = pretoken.encode('utf_8')
 
-                    # the linked list is comprised of each bytes in the pretoken.
-                    li = [self.BytePointer(self.vocab_index[bytes([b])]) for b in pretoken_bytes]
-                    li[0].is_token_start = True
-                    li[-1].is_token_end = True
+            # the linked list is comprised of each bytes in the pretoken.
+            li = [self.BytePointer(self.vocab_index[bytes([b])]) for b in pretoken_bytes]
 
-                    # maintain the helper pointers.
-                    if not first_pointer:
-                        first_pointer = li[0]
-                    if last_end_pointer:
-                        last_end_pointer.next = li[0]
-                        li[0].prev = last_end_pointer
-                    last_end_pointer = li[-1]
+            # link within the list.
+            for b1, b2 in zip(li[:-1], li[1:]):
+                b1.next = b2
+                b2.prev = b1
+                k = (b1.value, b2.value)
+                if k not in pair_sets:
+                    pair_sets[k] = []
+                pair_sets[k].append(self.BytePair(b1, b2))
 
-                    # link within the list.
-                    for b1, b2 in zip(li[:-1], li[1:]):
-                        b1.next = b2
-                        b2.prev = b1
-                        k = (b1.value, b2.value)
-                        if k not in pair_sets:
-                            pair_sets[k] = []
-                        pair_sets[k].append(self.BytePair(b1, b2))
+            dummy_head = self.BytePointer(-1)
+            dummy_head.next = li[0]
+            li[0].prev = dummy_head
+            pretoken_pointers.append(dummy_head)
 
         for b1, b2 in self.indexed_merges:
             if (b1, b2) in pair_sets:
@@ -131,10 +104,7 @@ class BpeTokenizer:
                         continue
 
                     new_value = self.vocab_index[self.vocab[b1] + self.vocab[b2]]
-                    new_p = self.BytePointer(
-                        value = new_value,
-                        is_token_start= p1.is_token_start, 
-                        is_token_end = p2.is_token_end)
+                    new_p = self.BytePointer(new_value)
                     
                     # maintain the linked list.
                     if p2.next:
@@ -144,30 +114,56 @@ class BpeTokenizer:
                         new_p.prev = p1.prev
                         p1.prev.next = new_p
 
-                    # update the list head.
-                    if first_pointer == p1:
-                        first_pointer = new_p
-
                     # create new pairs within the same pretoken.
-                    if not new_p.is_token_start:
+                    if new_p.prev != None and new_p.prev.value != -1:
                         new_k = (new_p.prev.value, new_value)
                         if new_k not in pair_sets:
                             pair_sets[new_k] = []
                         pair_sets[new_k].append(self.BytePair(new_p.prev, new_p))
-                    if not new_p.is_token_end:
+                    if new_p.next != None:
                         new_k = (new_value, new_p.next.value)
                         if new_k not in pair_sets:
                             pair_sets[new_k] = []
                         pair_sets[new_k].append(self.BytePair(new_p, new_p.next))
-
-        # Construct the resulting token list.
-        ret = []
-        p = first_pointer
-        while p:
-            ret.append(p.value)
-            # print(p.value, self.vocab[p.value])
+        
+        ret = {}
+        for idx, p in enumerate(pretoken_pointers):
             p = p.next
+            tokens = []
+            while p != None:
+                tokens.append(p.value)
+                p = p.next
+            ret[pretoken_list[idx]] = tokens
         return ret
+
+
+    def encode(self, text: str) -> list[int]:
+        if self.special_tokens:
+            chunks_splitted = re.split('(' + '|'.join(map(re.escape, self.special_tokens)) + ')', text)
+        else:
+            chunks_splitted = [text]
+
+        pretoken_set = set()
+        for chunk in chunks_splitted:
+            if not (self.special_tokens and chunk in self.special_tokens):
+                for pretoken in re.finditer(PRETOKENIZATION_PATTERN, chunk):
+                    if len(pretoken.group(0)) == 0:
+                        continue
+                    pretoken_set.add(pretoken.group(0))
+
+        pretoken_dict = self.encode_pretoken_set(list(pretoken_set))
+
+        results = []
+        for chunk in chunks_splitted:
+            if self.special_tokens and chunk in self.special_tokens:
+                results.append(self.vocab_index[chunk.encode('utf-8')])
+            else:
+                for pretoken in re.finditer(PRETOKENIZATION_PATTERN, chunk):
+                    if len(pretoken) == 0:
+                        continue
+                    results += pretoken_dict[pretoken.group(0)]
+
+        return results
     
 
     def encode_iterable(
