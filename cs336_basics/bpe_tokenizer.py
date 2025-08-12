@@ -5,9 +5,10 @@ from functools import reduce
 import json
 import multiprocessing as mp
 import regex as re
+import time
 
 
-ENCODE_ITERABLE_CHUNK_SIZE = 2**22
+ENCODE_ITERABLE_CHUNK_SIZE = 2**28
 
 
 class BpeTokenizer:
@@ -22,6 +23,7 @@ class BpeTokenizer:
         self.special_tokens = sorted(special_tokens, key = len, reverse = True) if special_tokens else None
         self.vocab_index = {v : k for k, v in vocab.items()}
         self.indexed_merges = [(self.vocab_index[b1], self.vocab_index[b2]) for b1, b2 in self.merges]
+        self.pretoken_dict = {}
 
 
     @classmethod
@@ -71,7 +73,8 @@ class BpeTokenizer:
     def encode_pretoken_set(
         self,
         pretoken_list: list[str],
-    ) -> dict[str, list[int]]:
+    ):
+        print(f'size of pretoken_list = {len(pretoken_list)}')
         pair_sets = {}
         pretoken_pointers = []
         for pretoken in pretoken_list:
@@ -126,15 +129,13 @@ class BpeTokenizer:
                             pair_sets[new_k] = []
                         pair_sets[new_k].append(self.BytePair(new_p, new_p.next))
         
-        ret = {}
         for idx, p in enumerate(pretoken_pointers):
             p = p.next
             tokens = []
             while p != None:
                 tokens.append(p.value)
                 p = p.next
-            ret[pretoken_list[idx]] = tokens
-        return ret
+            self.pretoken_dict[pretoken_list[idx]] = tokens
 
 
     def encode(self, text: str) -> list[int]:
@@ -147,11 +148,11 @@ class BpeTokenizer:
         for chunk in chunks_splitted:
             if not (self.special_tokens and chunk in self.special_tokens):
                 for pretoken in re.finditer(PRETOKENIZATION_PATTERN, chunk):
-                    if len(pretoken.group(0)) == 0:
+                    if len(pretoken.group(0)) == 0 or pretoken.group(0) in self.pretoken_dict:
                         continue
                     pretoken_set.add(pretoken.group(0))
 
-        pretoken_dict = self.encode_pretoken_set(list(pretoken_set))
+        self.encode_pretoken_set(list(pretoken_set))
 
         results = []
         for chunk in chunks_splitted:
@@ -161,7 +162,7 @@ class BpeTokenizer:
                 for pretoken in re.finditer(PRETOKENIZATION_PATTERN, chunk):
                     if len(pretoken) == 0:
                         continue
-                    results += pretoken_dict[pretoken.group(0)]
+                    results += self.pretoken_dict[pretoken.group(0)]
 
         return results
     
@@ -171,13 +172,29 @@ class BpeTokenizer:
         iterable: Iterable[str]
     ) -> Iterator[int]:
         acc_s = ''
+        special_tokens_pattern = re.compile('|'.join(map(re.escape, self.special_tokens))) if self.special_tokens else None
         for s in iterable:
-            acc_s += s
-            if len(acc_s) > ENCODE_ITERABLE_CHUNK_SIZE:
+            if special_tokens_pattern:
+                match = special_tokens_pattern.search(s)
+            else:
+                match = True
+            if len(acc_s) > ENCODE_ITERABLE_CHUNK_SIZE and match:
+                start_time = time.time()
+                print(f'processing acc_s of length={len(acc_s)}, sample="{acc_s[:100]}"...')
+                if isinstance(match, bool):
+                    end_index = len(s)
+                else:
+                    end_index = match.span()[1]
+                acc_s += s[:end_index]
                 token_ids = self.encode(acc_s)
-                acc_s = ''
+                end_time = time.time()
+                print(f'runtime = {end_time - start_time}')
+                acc_s = s[end_index:]
                 for token_id in token_ids:
                     yield token_id
+            else:
+                acc_s += s
+
         if len(acc_s) > 0:
             token_ids = self.encode(acc_s)
             acc_s = ''
