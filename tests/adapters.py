@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from jaxtyping import Float, Int
 from cs336_basics.bpe import Bpe
 from cs336_basics.bpe_tokenizer import BpeTokenizer
-from cs336_basics.model.nn_utils import Linear, Embedding
+from cs336_basics.model.nn_utils import Linear, Embedding, RmsNorm
 
 import numpy.typing as npt
 import torch
@@ -388,7 +388,9 @@ def run_rmsnorm(
         Float[Tensor,"... d_model"]: Tensor of with the same shape as `in_features` with the output of running
         RMSNorm of the `in_features`.
     """
-    raise NotImplementedError
+    rms_norm = RmsNorm(d_model, eps)
+    rms_norm.gain = nn.Parameter(weights)
+    return rms_norm.forward(in_features)
 
 
 def run_silu(in_features: Float[Tensor, " ..."]) -> Float[Tensor, " ..."]:

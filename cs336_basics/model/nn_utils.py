@@ -52,4 +52,35 @@ class Embedding(nn.Module):
         x: torch.Tensor,
     ):
         return self.embedding_table[torch.clamp(x, 0, self.num_embeddings - 1)]
-        
+
+
+class RmsNorm(nn.Module):
+    def __init__(
+        self,
+        d_model: int,
+        eps: float,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+    ):
+        factory_kwargs = {"device": device, "dtype": dtype}
+        super().__init__()
+        self.d_model = d_model
+        self.eps = eps
+        self.gain = Parameter(torch.empty(d_model, **factory_kwargs))
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        nn.init.constant(self.gain, 1.0)
+
+    def forward(
+        self,
+        x: torch.Tensor,
+    ):
+        in_dtype = x.dtype
+        x = x.to(torch.float32)
+
+        rms = torch.sqrt(torch.sum(x * x, dim = -1, keepdim = True) / self.d_model + self.eps)
+
+        result = x / rms * self.gain
+
+        return result.to(in_dtype)
