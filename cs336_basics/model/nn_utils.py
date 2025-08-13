@@ -1,6 +1,9 @@
+from einops import einsum
 import torch
 import torch.nn as nn
+from torch import Tensor
 from torch.nn.parameter import Parameter
+from jaxtyping import Float, Int
 from math import sin, cos
 
 
@@ -173,3 +176,16 @@ class Rope(nn.Module):
         x1 = x1[..., ::2] + x1[..., 1::2]
 
         return torch.stack([x0, x1], dim=-1).flatten(start_dim=-2)
+
+
+def scaled_dot_product_attention(
+    Q: Float[Tensor, " ... queries d_k"],
+    K: Float[Tensor, " ... keys d_k"],
+    V: Float[Tensor, " ... values d_v"],
+    mask: Float[Tensor, " ... queries keys"] | None = None,
+) -> Float[Tensor, " ... queries d_v"]:
+    x = einsum(Q, K, "... queries d_k, ... keys d_k -> ... queries keys") / Q.shape[-1]**0.5
+    x = x + torch.where(mask, 0.0, -torch.inf)
+    x = softmax(x, dim=-1)
+    x = einsum(x, V, "... queries keys_or_values, ... keys_or_values dv -> ... queries dv")
+    return x
