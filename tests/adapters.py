@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from jaxtyping import Float, Int
 from cs336_basics.bpe import Bpe
 from cs336_basics.bpe_tokenizer import BpeTokenizer
-from cs336_basics.model.nn_utils import Linear, Embedding, RmsNorm
+from cs336_basics.model.nn_utils import Linear, Embedding, RmsNorm, silu, Swiglu
 
 import numpy.typing as npt
 import torch
@@ -93,7 +93,11 @@ def run_swiglu(
     # swiglu.w1.weight.data = w1_weight
     # swiglu.w2.weight.data = w2_weight
     # swiglu.w3.weight.data = w3_weight
-    raise NotImplementedError
+    ff = Swiglu(d_model, d_ff)
+    ff.w1.data = w1_weight
+    ff.w2.data = w2_weight
+    ff.w3.data = w3_weight
+    return ff.forward(in_features)
 
 
 def run_scaled_dot_product_attention(
@@ -404,7 +408,7 @@ def run_silu(in_features: Float[Tensor, " ..."]) -> Float[Tensor, " ..."]:
         Float[Tensor,"..."]: of with the same shape as `in_features` with the output of applying
         SiLU to each element.
     """
-    raise NotImplementedError
+    return silu(in_features)
 
 
 def run_get_batch(

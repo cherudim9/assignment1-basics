@@ -84,3 +84,37 @@ class RmsNorm(nn.Module):
         result = x / rms * self.gain
 
         return result.to(in_dtype)
+
+
+def silu(x: torch.Tensor):
+    return x * torch.sigmoid(x)
+
+
+class Swiglu(nn.Module):
+    def __init__(
+        self,
+        d_model: int,
+        d_ff: int,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+    ):
+        factory_kwargs = {"device": device, "dtype": dtype}
+        super().__init__()
+        self.d_model = d_model
+        self.d_ff = d_ff
+        self.w1 = Parameter(torch.empty(d_ff, d_model, **factory_kwargs))
+        self.w2 = Parameter(torch.empty(d_model, d_ff, **factory_kwargs))
+        self.w3 = Parameter(torch.empty(d_ff, d_model, **factory_kwargs))
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        nn.init.trunc_normal_(self.w1, 0.0, 1.0, -3.0, 3.0)
+        nn.init.trunc_normal_(self.w2, 0.0, 1.0, -3.0, 3.0)
+        nn.init.trunc_normal_(self.w3, 0.0, 1.0, -3.0, 3.0)
+
+    def forward(
+        self,
+        x: torch.Tensor,
+    ):
+        print(x.shape)
+        return (silu(x @ self.w1.t()) * (x @ self.w3.t())) @ self.w2.t()
