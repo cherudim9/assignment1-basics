@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.nn.parameter import Parameter
+from math import sin, cos
 
 
 class Linear(nn.Module):
@@ -50,7 +51,7 @@ class Embedding(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-    ):
+    ) -> torch.Tensor:
         return self.embedding_table[torch.clamp(x, 0, self.num_embeddings - 1)]
 
 
@@ -75,7 +76,7 @@ class RmsNorm(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-    ):
+    ) -> torch.Tensor:
         in_dtype = x.dtype
         x = x.to(torch.float32)
 
@@ -115,6 +116,53 @@ class Swiglu(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-    ):
-        print(x.shape)
+    ) -> torch.Tensor:
         return (silu(x @ self.w1.t()) * (x @ self.w3.t())) @ self.w2.t()
+    
+
+class Rope(nn.Module):
+    def __init__(
+        self,
+        theta: float,
+        d_k: int,
+        max_seq_len: int,
+        device: torch.device | None = None,
+    ):
+        factory_kwargs = {"device": device}
+        super().__init__()
+        self.theta = theta
+        self.d_k = d_k
+        self.max_seq_len = max_seq_len
+        assert self.d_k % 2 == 0
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        r_even = []
+        r_odd = []
+        for i in range(self.max_seq_len):
+            a = []
+            b = []
+            for k in range(self.d_k // 2):
+                theta_at_i_k = i / self.theta**(2.0 * k / self.d_k)
+                a += [cos(theta_at_i_k), -sin(theta_at_i_k)]
+                b += [sin(theta_at_i_k), cos(theta_at_i_k)]
+            r_even.append(a)
+            r_odd.append(b)
+        self.register_buffer('r_even', torch.tensor(r_even), persistent=False)
+        self.register_buffer('r_odd', torch.tensor(r_odd), persistent=False)
+
+    def forward(
+        self,
+        x: torch.Tensor, token_positions: torch.Tensor
+    ) -> torch.Tensor:
+        token_positions = token_positions - torch.min(token_positions, dim = -1).values
+        r_even = self.r_even[token_positions]
+        r_odd = self.r_odd[token_positions]
+
+        x0 = x * r_even
+        x0 = x0[..., ::2] + x0[..., 1::2]
+
+        x1 = x * r_odd
+        x1 = x1[..., ::2] + x1[..., 1::2]
+
+        return torch.stack([x0, x1], dim=-1).flatten(start_dim=-2)
