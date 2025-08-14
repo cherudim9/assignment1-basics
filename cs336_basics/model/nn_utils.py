@@ -1,4 +1,4 @@
-from einops import einsum
+from einops import einsum, rearrange
 import torch
 import torch.nn as nn
 from torch import Tensor
@@ -185,7 +185,59 @@ def scaled_dot_product_attention(
     mask: Float[Tensor, " ... queries keys"] | None = None,
 ) -> Float[Tensor, " ... queries d_v"]:
     x = einsum(Q, K, "... queries d_k, ... keys d_k -> ... queries keys") / Q.shape[-1]**0.5
-    x = x + torch.where(mask, 0.0, -torch.inf)
+    if mask != None:
+        print(x.shape)
+        print(mask.shape)
+        x = x + torch.where(mask, 0.0, -torch.inf)
     x = softmax(x, dim=-1)
-    x = einsum(x, V, "... queries keys_or_values, ... keys_or_values dv -> ... queries dv")
+    x = einsum(x, V, "... queries keys_or_values, ... keys_or_values d_v -> ... queries d_v")
     return x
+
+
+class MultiheadSelfAttention(nn.Module):
+    def __init__(
+        self,
+        d_model: int,
+        num_heads: int,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+    ):
+        factory_kwargs = {"device": device, "dtype": dtype}
+        super().__init__()
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.d_k = d_model // num_heads
+        self.d_v = self.d_k
+        self.w_q = Parameter(torch.empty(d_model, d_model, **factory_kwargs))
+        self.w_k = Parameter(torch.empty(d_model, d_model, **factory_kwargs))
+        self.w_v = Parameter(torch.empty(d_model, d_model, **factory_kwargs))
+        self.w_o = Parameter(torch.empty(d_model, d_model, **factory_kwargs))
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        std = (1.0 / self.d_model) ** 0.5
+        nn.init.trunc_normal_(self.w_q, mean=0.0, std=std,a=-3*std, b=3*std)
+        nn.init.trunc_normal_(self.w_k, mean=0.0, std=std,a=-3*std, b=3*std)
+        nn.init.trunc_normal_(self.w_v, mean=0.0, std=std,a=-3*std, b=3*std)
+        nn.init.trunc_normal_(self.w_o, mean=0.0, std=std,a=-3*std, b=3*std)
+
+    def forward(
+        self,
+        x: torch.Tensor,
+    ) -> torch.Tensor:
+        q = einsum(x, self.w_q, "... sequence_length d_in, d_model d_in -> ... sequence_length d_model")
+        q = rearrange(q, "... sequence_length (num_heads d_k) -> ... num_heads sequence_length d_k", num_heads=self.num_heads, d_k =self.d_k)
+
+        k = einsum(x, self.w_k, "... sequence_length d_in, d_model d_in -> ... sequence_length d_model")
+        k= rearrange(k, "... sequence_length (num_heads d_k) -> ... num_heads sequence_length d_k", num_heads=self.num_heads, d_k =self.d_k)
+
+        v = einsum(x, self.w_v, "... sequence_length d_in, d_model d_in -> ... sequence_length d_model")
+        v = rearrange(v, "... sequence_length (num_heads d_v) -> ... num_heads sequence_length d_v", num_heads=self.num_heads, d_v =self.d_v)
+
+        mask = torch.tril(torch.full((q.shape[-2], q.shape[-2]), True))
+
+        ret = scaled_dot_product_attention(q, k, v, mask)
+        ret = rearrange(ret, "... num_heads sequence_length d_v -> ... sequence_length (num_heads d_v)")
+        ret = ret @ self.w_o.T
+
+        return ret
