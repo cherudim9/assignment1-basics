@@ -302,21 +302,18 @@ def run_transformer_block(
     """
     rope = Rope(theta=theta, d_k=d_model // num_heads, max_seq_len=max_seq_len)
     tb = TransformerBlock(d_model=d_model, num_heads=num_heads, d_ff=d_ff, eps=1e-5, rope=rope)
-
-    for s, t in weights.items():
-        print(f'{s} shape = {t.shape}')
     
-    tb.mha.w_q.data = weights['attn.k_proj.weight']
-    tb.mha.w_k.data = weights['attn.k_proj.weight']
-    tb.mha.w_v.data = weights['attn.v_proj.weight']
-    tb.mha.w_o.data = weights['attn.output_proj.weight']
+    tb.mha.w_q.weight.data = weights['attn.q_proj.weight']
+    tb.mha.w_k.weight.data = weights['attn.k_proj.weight']
+    tb.mha.w_v.weight.data = weights['attn.v_proj.weight']
+    tb.mha.w_o.weight.data = weights['attn.output_proj.weight']
     tb.rms1.gain.data = weights['ln1.weight']
-    tb.ffn.w1.data = weights['ffn.w1.weight']
-    tb.ffn.w2.data = weights['ffn.w2.weight']
-    tb.ffn.w3.data = weights['ffn.w3.weight']
+    tb.ffn.w1.weight.data = weights['ffn.w1.weight']
+    tb.ffn.w2.weight.data = weights['ffn.w2.weight']
+    tb.ffn.w3.weight.data = weights['ffn.w3.weight']
     tb.rms2.gain.data = weights['ln2.weight']
 
-    return tb(x=in_features, token_positions=torch.tensor(range(in_features.shape[-2])))
+    return tb(x=in_features, token_positions=torch.arange(in_features.shape[-2]))
 
 
 def run_transformer_lm(
