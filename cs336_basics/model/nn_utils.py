@@ -74,7 +74,7 @@ class RmsNorm(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        nn.init.constant(self.gain, 1.0)
+        nn.init.constant_(self.gain, 1.0)
 
     def forward(
         self,
@@ -113,21 +113,20 @@ class Swiglu(nn.Module):
         super().__init__()
         self.d_model = d_model
         self.d_ff = d_ff
-        self.w1 = Parameter(torch.empty(d_ff, d_model, **factory_kwargs))
-        self.w2 = Parameter(torch.empty(d_model, d_ff, **factory_kwargs))
-        self.w3 = Parameter(torch.empty(d_ff, d_model, **factory_kwargs))
-        self.reset_parameters()
+        self.w1 = Linear(d_model, d_ff, **factory_kwargs) 
+        self.w2 = Linear(d_ff, d_model, **factory_kwargs) 
+        self.w3 = Linear(d_model, d_ff, **factory_kwargs) 
 
     def reset_parameters(self):
-        nn.init.trunc_normal_(self.w1, 0.0, 1.0, -3.0, 3.0)
-        nn.init.trunc_normal_(self.w2, 0.0, 1.0, -3.0, 3.0)
-        nn.init.trunc_normal_(self.w3, 0.0, 1.0, -3.0, 3.0)
+        self.w1.reset_parameters()
+        self.w2.reset_parameters()
+        self.w3.reset_parameters()
 
     def forward(
         self,
         x: torch.Tensor,
     ) -> torch.Tensor:
-        return (silu(x @ self.w1.t()) * (x @ self.w3.t())) @ self.w2.t()
+        return self.w2(silu(self.w1(x)) * self.w3(x))
     
 
 class Rope(nn.Module):
@@ -186,8 +185,6 @@ def scaled_dot_product_attention(
 ) -> Float[Tensor, " ... queries d_v"]:
     x = einsum(Q, K, "... queries d_k, ... keys d_k -> ... queries keys") / Q.shape[-1]**0.5
     if mask != None:
-        print(x.shape)
-        print(mask.shape)
         x = x + torch.where(mask, 0.0, -torch.inf)
     x = softmax(x, dim=-1)
     x = einsum(x, V, "... queries keys_or_values, ... keys_or_values d_v -> ... queries d_v")
@@ -210,41 +207,67 @@ class MultiheadSelfAttention(nn.Module):
         self.d_k = d_model // num_heads
         self.d_v = self.d_k
         self.rope = rope
-        self.w_q = Parameter(torch.empty(d_model, d_model, **factory_kwargs))
-        self.w_k = Parameter(torch.empty(d_model, d_model, **factory_kwargs))
-        self.w_v = Parameter(torch.empty(d_model, d_model, **factory_kwargs))
-        self.w_o = Parameter(torch.empty(d_model, d_model, **factory_kwargs))
-        self.reset_parameters()
+        self.w_q = Linear(d_model, d_model, **factory_kwargs)
+        self.w_k = Linear(d_model, d_model, **factory_kwargs)
+        self.w_v = Linear(d_model, d_model, **factory_kwargs)
+        self.w_o = Linear(d_model, d_model, **factory_kwargs)
 
     def reset_parameters(self):
-        std = (1.0 / self.d_model) ** 0.5
-        nn.init.trunc_normal_(self.w_q, mean=0.0, std=std,a=-3*std, b=3*std)
-        nn.init.trunc_normal_(self.w_k, mean=0.0, std=std,a=-3*std, b=3*std)
-        nn.init.trunc_normal_(self.w_v, mean=0.0, std=std,a=-3*std, b=3*std)
-        nn.init.trunc_normal_(self.w_o, mean=0.0, std=std,a=-3*std, b=3*std)
+        self.w_q.reset_parameters()
+        self.w_k.reset_parameters()
+        self.w_v.reset_parameters()
+        self.w_o.reset_parameters()
 
     def forward(
         self,
         x: torch.Tensor,
         token_positions: Int[Tensor, " ... sequence_length"] | None = None,
     ) -> torch.Tensor:
-        q = einsum(x, self.w_q, "... sequence_length d_in, d_model d_in -> ... sequence_length d_model")
+        q = self.w_q(x)
         q = rearrange(q, "... sequence_length (num_heads d_k) -> ... num_heads sequence_length d_k", num_heads=self.num_heads, d_k =self.d_k)
         if token_positions != None:
-            q = self.rope.forward(q, token_positions)
+            q = self.rope(q, token_positions)
 
-        k = einsum(x, self.w_k, "... sequence_length d_in, d_model d_in -> ... sequence_length d_model")
+        k = self.w_k(x)
         k= rearrange(k, "... sequence_length (num_heads d_k) -> ... num_heads sequence_length d_k", num_heads=self.num_heads, d_k =self.d_k)
         if token_positions != None:
-            k = self.rope.forward(k, token_positions)
+            k = self.rope(k, token_positions)
 
-        v = einsum(x, self.w_v, "... sequence_length d_in, d_model d_in -> ... sequence_length d_model")
+        v = self.w_v(x)
         v = rearrange(v, "... sequence_length (num_heads d_v) -> ... num_heads sequence_length d_v", num_heads=self.num_heads, d_v =self.d_v)
 
         mask = torch.tril(torch.full((q.shape[-2], q.shape[-2]), True))
 
         ret = scaled_dot_product_attention(q, k, v, mask)
         ret = rearrange(ret, "... num_heads sequence_length d_v -> ... sequence_length (num_heads d_v)")
-        ret = ret @ self.w_o.T
+        ret = self.w_o(ret)
 
         return ret
+    
+
+class TransformerBlock(nn.Module):
+    def __init__(
+        self,
+        d_model: int,
+        num_heads: int,
+        d_ff: int,
+        eps: float,
+        rope: Rope | None = None,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+    ):
+        factory_kwargs = {"device": device, "dtype": dtype}
+        super().__init__()
+        self.mha = MultiheadSelfAttention(d_model=d_model, num_heads=num_heads, rope=rope, **factory_kwargs)
+        self.ffn = Swiglu(d_model=d_model, d_ff=d_ff, **factory_kwargs)
+        self.rms1 = RmsNorm(d_model=d_model, eps=eps, **factory_kwargs)
+        self.rms2 = RmsNorm(d_model=d_model, eps=eps, **factory_kwargs)
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        token_positions: Int[Tensor, " ... sequence_length"] | None = None,
+    ) -> torch.Tensor:
+        x = x + self.mha(self.rms1(x), token_positions)
+        x = x + self.ffn(self.rms2(x))
+        return x

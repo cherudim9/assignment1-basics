@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from jaxtyping import Float, Int
 from cs336_basics.bpe import Bpe
 from cs336_basics.bpe_tokenizer import BpeTokenizer
-from cs336_basics.model.nn_utils import Linear, Embedding, RmsNorm, silu, Swiglu, Rope, softmax, scaled_dot_product_attention, MultiheadSelfAttention
+from cs336_basics.model.nn_utils import Linear, Embedding, RmsNorm, silu, Swiglu, Rope, softmax, scaled_dot_product_attention, MultiheadSelfAttention, TransformerBlock
 
 import numpy.typing as npt
 import torch
@@ -36,7 +36,7 @@ def run_linear(
 
     l.weight = nn.Parameter(weights)
     
-    return l.forward(in_features)
+    return l(in_features)
 
 
 def run_embedding(
@@ -61,7 +61,7 @@ def run_embedding(
 
     embedding.embedding_table = nn.Parameter(weights)
 
-    return embedding.forward(token_ids)
+    return embedding(token_ids)
 
 
 def run_swiglu(
@@ -94,10 +94,10 @@ def run_swiglu(
     # swiglu.w2.weight.data = w2_weight
     # swiglu.w3.weight.data = w3_weight
     ff = Swiglu(d_model, d_ff)
-    ff.w1.data = w1_weight
-    ff.w2.data = w2_weight
-    ff.w3.data = w3_weight
-    return ff.forward(in_features)
+    ff.w1.weight.data = w1_weight
+    ff.w2.weight.data = w2_weight
+    ff.w3.weight.data = w3_weight
+    return ff(in_features)
 
 
 def run_scaled_dot_product_attention(
@@ -153,11 +153,11 @@ def run_multihead_self_attention(
         implementation with the given QKV projection weights and input features.
     """
     msa = MultiheadSelfAttention(d_model=d_model, num_heads=num_heads)
-    msa.w_q.data = q_proj_weight
-    msa.w_k.data = k_proj_weight
-    msa.w_v.data = v_proj_weight
-    msa.w_o.data = o_proj_weight
-    return msa.forward(in_features)
+    msa.w_q.weight.data = q_proj_weight
+    msa.w_k.weight.data = k_proj_weight
+    msa.w_v.weight.data = v_proj_weight
+    msa.w_o.weight.data = o_proj_weight
+    return msa(in_features)
 
 
 def run_multihead_self_attention_with_rope(
@@ -199,11 +199,11 @@ def run_multihead_self_attention_with_rope(
     """
     rope = Rope(theta, d_model // num_heads, max_seq_len)
     msa = MultiheadSelfAttention(d_model=d_model, num_heads=num_heads, rope=rope)
-    msa.w_q.data = q_proj_weight
-    msa.w_k.data = k_proj_weight
-    msa.w_v.data = v_proj_weight
-    msa.w_o.data = o_proj_weight
-    return msa.forward(in_features, token_positions)
+    msa.w_q.weight.data = q_proj_weight
+    msa.w_k.weight.data = k_proj_weight
+    msa.w_v.weight.data = v_proj_weight
+    msa.w_o.weight.data = o_proj_weight
+    return msa(in_features, token_positions)
 
 
 def run_rope(
@@ -227,7 +227,7 @@ def run_rope(
     """
     rope = Rope(theta, d_k, max_seq_len)
 
-    return rope.forward(in_query_or_key, token_positions)
+    return rope(in_query_or_key, token_positions)
 
 
 def run_transformer_block(
@@ -282,13 +282,13 @@ def run_transformer_block(
                 Shape is (d_model,).
             - `ffn.w1.weight`
                 Weight of the first linear transformation in the FFN.
-                Shape is (d_model, d_ff).
+                Shape is (d_ff, d_model).
             - `ffn.w2.weight`
                 Weight of the second linear transformation in the FFN.
-                Shape is (d_ff, d_model).
+                Shape is (d_model, d_ff).
             - `ffn.w3.weight`
                 Weight of the third linear transformation in the FFN.
-                Shape is (d_model, d_ff).
+                Shape is (d_ff, d_model).
             - `ln2.weight`
                 Weights of affine transform for the second RMSNorm
                 applied in the transformer block.
@@ -300,7 +300,23 @@ def run_transformer_block(
         Float[Tensor, "batch sequence_length d_model"] Tensor with the output of
         running the Transformer block on the input features while using RoPE.
     """
-    raise NotImplementedError
+    rope = Rope(theta=theta, d_k=d_model // num_heads, max_seq_len=max_seq_len)
+    tb = TransformerBlock(d_model=d_model, num_heads=num_heads, d_ff=d_ff, eps=1e-5, rope=rope)
+
+    for s, t in weights.items():
+        print(f'{s} shape = {t.shape}')
+    
+    tb.mha.w_q.data = weights['attn.k_proj.weight']
+    tb.mha.w_k.data = weights['attn.k_proj.weight']
+    tb.mha.w_v.data = weights['attn.v_proj.weight']
+    tb.mha.w_o.data = weights['attn.output_proj.weight']
+    tb.rms1.gain.data = weights['ln1.weight']
+    tb.ffn.w1.data = weights['ffn.w1.weight']
+    tb.ffn.w2.data = weights['ffn.w2.weight']
+    tb.ffn.w3.data = weights['ffn.w3.weight']
+    tb.rms2.gain.data = weights['ln2.weight']
+
+    return tb(x=in_features, token_positions=torch.tensor(range(in_features.shape[-2])))
 
 
 def run_transformer_lm(
@@ -407,7 +423,7 @@ def run_rmsnorm(
     """
     rms_norm = RmsNorm(d_model, eps)
     rms_norm.gain = nn.Parameter(weights)
-    return rms_norm.forward(in_features)
+    return rms_norm(in_features)
 
 
 def run_silu(in_features: Float[Tensor, " ..."]) -> Float[Tensor, " ..."]:
