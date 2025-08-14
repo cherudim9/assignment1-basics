@@ -199,6 +199,7 @@ class MultiheadSelfAttention(nn.Module):
         self,
         d_model: int,
         num_heads: int,
+        rope: Rope | None = None,
         device: torch.device | None = None,
         dtype: torch.dtype | None = None,
     ):
@@ -208,6 +209,7 @@ class MultiheadSelfAttention(nn.Module):
         self.num_heads = num_heads
         self.d_k = d_model // num_heads
         self.d_v = self.d_k
+        self.rope = rope
         self.w_q = Parameter(torch.empty(d_model, d_model, **factory_kwargs))
         self.w_k = Parameter(torch.empty(d_model, d_model, **factory_kwargs))
         self.w_v = Parameter(torch.empty(d_model, d_model, **factory_kwargs))
@@ -224,12 +226,17 @@ class MultiheadSelfAttention(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
+        token_positions: Int[Tensor, " ... sequence_length"] | None = None,
     ) -> torch.Tensor:
         q = einsum(x, self.w_q, "... sequence_length d_in, d_model d_in -> ... sequence_length d_model")
         q = rearrange(q, "... sequence_length (num_heads d_k) -> ... num_heads sequence_length d_k", num_heads=self.num_heads, d_k =self.d_k)
+        if token_positions != None:
+            q = self.rope.forward(q, token_positions)
 
         k = einsum(x, self.w_k, "... sequence_length d_in, d_model d_in -> ... sequence_length d_model")
         k= rearrange(k, "... sequence_length (num_heads d_k) -> ... num_heads sequence_length d_k", num_heads=self.num_heads, d_k =self.d_k)
+        if token_positions != None:
+            k = self.rope.forward(k, token_positions)
 
         v = einsum(x, self.w_v, "... sequence_length d_in, d_model d_in -> ... sequence_length d_model")
         v = rearrange(v, "... sequence_length (num_heads d_v) -> ... num_heads sequence_length d_v", num_heads=self.num_heads, d_v =self.d_v)
