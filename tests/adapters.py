@@ -6,7 +6,8 @@ from collections.abc import Iterable
 from jaxtyping import Float, Int
 from cs336_basics.bpe import Bpe
 from cs336_basics.bpe_tokenizer import BpeTokenizer
-from cs336_basics.model.nn_utils import Linear, Embedding, RmsNorm, silu, Swiglu, Rope, softmax, scaled_dot_product_attention, MultiheadSelfAttention, TransformerBlock, TransformerLm
+from cs336_basics.model.nn_utils import silu, softmax
+from cs336_basics.model.model import Linear, Embedding, RmsNorm, Swiglu, Rope, scaled_dot_product_attention, MultiheadSelfAttention, TransformerBlock, TransformerLm
 
 import numpy.typing as npt
 import torch
