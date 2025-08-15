@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from jaxtyping import Float, Int
 from cs336_basics.bpe import Bpe
 from cs336_basics.bpe_tokenizer import BpeTokenizer
-from cs336_basics.model.nn_utils import Linear, Embedding, RmsNorm, silu, Swiglu, Rope, softmax, scaled_dot_product_attention, MultiheadSelfAttention, TransformerBlock
+from cs336_basics.model.nn_utils import Linear, Embedding, RmsNorm, silu, Swiglu, Rope, softmax, scaled_dot_product_attention, MultiheadSelfAttention, TransformerBlock, TransformerLm
 
 import numpy.typing as npt
 import torch
@@ -395,8 +395,31 @@ def run_transformer_lm(
         Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
         next-word distribution for each token.
     """
-    raise NotImplementedError
+    transformer_lm = TransformerLm(
+        vocab_size=vocab_size,
+        context_length=context_length,
+        d_model=d_model,
+        num_layers=num_layers,
+        num_heads=num_heads,
+        d_ff=d_ff,
+        rope_theta=rope_theta,)
+    
+    transformer_lm.embedding_layer.embedding_table.data = weights['token_embeddings.weight']
+    for i in range(num_layers):
+        transformer_lm.layers[i].mha.w_q.weight.data = weights[f'layers.{i}.attn.q_proj.weight']
+        transformer_lm.layers[i].mha.w_k.weight.data = weights[f'layers.{i}.attn.k_proj.weight']
+        transformer_lm.layers[i].mha.w_v.weight.data = weights[f'layers.{i}.attn.v_proj.weight']
+        transformer_lm.layers[i].mha.w_o.weight.data = weights[f'layers.{i}.attn.output_proj.weight']
+        transformer_lm.layers[i].rms1.gain.data = weights[f'layers.{i}.ln1.weight']
+        transformer_lm.layers[i].ffn.w1.weight.data = weights[f'layers.{i}.ffn.w1.weight']
+        transformer_lm.layers[i].ffn.w2.weight.data = weights[f'layers.{i}.ffn.w2.weight']
+        transformer_lm.layers[i].ffn.w3.weight.data = weights[f'layers.{i}.ffn.w3.weight']
+        transformer_lm.layers[i].rms2.gain.data = weights[f'layers.{i}.ln2.weight']
+    
+    transformer_lm.norm_layer.gain.data = weights['ln_final.weight']
+    transformer_lm.linear_layer.weight.data = weights['lm_head.weight']
 
+    return transformer_lm(in_indices)
 
 def run_rmsnorm(
     d_model: int,
