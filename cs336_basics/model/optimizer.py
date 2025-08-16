@@ -3,6 +3,22 @@ from typing import Optional
 import torch
 import math
 
+
+def get_lr_cosine_schedule(
+    it: int,
+    max_learning_rate: float,
+    min_learning_rate: float,
+    warmup_iters: int,
+    cosine_cycle_iters: int,
+):
+    if it < warmup_iters:
+        return it * 1.0 / warmup_iters * max_learning_rate
+    if it > cosine_cycle_iters:
+        return min_learning_rate
+    x = (it - warmup_iters) *1.0 / (cosine_cycle_iters - warmup_iters) * math.pi
+    return min_learning_rate + 0.5 * (1.0 + math.cos(x)) * (max_learning_rate - min_learning_rate)
+
+
 class AdamW(torch.optim.Optimizer):
     def __init__(
         self,

@@ -8,7 +8,7 @@ from cs336_basics.bpe import Bpe
 from cs336_basics.bpe_tokenizer import BpeTokenizer
 from cs336_basics.model.nn_utils import silu, softmax, cross_entropy_loss
 from cs336_basics.model.model import Linear, Embedding, RmsNorm, Swiglu, Rope, scaled_dot_product_attention, MultiheadSelfAttention, TransformerBlock, TransformerLm
-from cs336_basics.model.optimizer import AdamW
+from cs336_basics.model.optimizer import AdamW, get_lr_cosine_schedule
 
 import numpy.typing as npt
 import torch
@@ -563,7 +563,13 @@ def run_get_lr_cosine_schedule(
     Returns:
         Learning rate at the given iteration under the specified schedule.
     """
-    raise NotImplementedError
+    return get_lr_cosine_schedule(
+        it=it,
+        max_learning_rate=max_learning_rate,
+        min_learning_rate=min_learning_rate,
+        warmup_iters=warmup_iters,
+        cosine_cycle_iters=cosine_cycle_iters,
+    )
 
 
 def run_save_checkpoint(
