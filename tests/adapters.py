@@ -9,6 +9,7 @@ from cs336_basics.bpe_tokenizer import BpeTokenizer
 from cs336_basics.model.nn_utils import silu, softmax, cross_entropy_loss, gradient_clipping
 from cs336_basics.model.model import Linear, Embedding, RmsNorm, Swiglu, Rope, scaled_dot_product_attention, MultiheadSelfAttention, TransformerBlock, TransformerLm
 from cs336_basics.model.optimizer import AdamW, get_lr_cosine_schedule
+from cs336_basics.model.data import get_batch
 
 import numpy.typing as npt
 import torch
@@ -482,7 +483,7 @@ def run_get_batch(
         is the sampled input sequences, and the second tuple item is the corresponding
         language modeling labels.
     """
-    raise NotImplementedError
+    return get_batch(dataset, batch_size, context_length, device)
 
 
 def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, " ..."]:
