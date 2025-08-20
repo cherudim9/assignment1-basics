@@ -10,6 +10,7 @@ from cs336_basics.model.nn_utils import silu, softmax, cross_entropy_loss, gradi
 from cs336_basics.model.model import Linear, Embedding, RmsNorm, Swiglu, Rope, scaled_dot_product_attention, MultiheadSelfAttention, TransformerBlock, TransformerLm
 from cs336_basics.model.optimizer import AdamW, get_lr_cosine_schedule
 from cs336_basics.model.data import get_batch
+from cs336_basics.model.serialization import save_checkpoint, load_checkpoint
 
 import numpy.typing as npt
 import torch
@@ -589,7 +590,7 @@ def run_save_checkpoint(
             we've completed.
         out (str | os.PathLike | BinaryIO | IO[bytes]): Path or file-like object to serialize the model, optimizer, and iteration to.
     """
-    raise NotImplementedError
+    save_checkpoint(model, optimizer, iteration, out)
 
 
 def run_load_checkpoint(
@@ -610,7 +611,7 @@ def run_load_checkpoint(
     Returns:
         int: the previously-serialized number of iterations.
     """
-    raise NotImplementedError
+    return load_checkpoint(src, model, optimizer)
 
 
 def get_tokenizer(
