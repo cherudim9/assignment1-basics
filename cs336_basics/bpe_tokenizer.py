@@ -74,7 +74,7 @@ class BpeTokenizer:
         self,
         pretoken_list: list[str],
     ):
-        print(f'size of pretoken_list = {len(pretoken_list)}')
+        # print(f'size of pretoken_list = {len(pretoken_list)}')
         pair_sets = {}
         pretoken_pointers = []
         for pretoken in pretoken_list:

@@ -327,5 +327,40 @@ class TransformerLm(nn.Module):
             x = transformer_block(x)
         x = self.norm_layer(x)
         x = self.linear_layer(x)
-        # x = softmax(x, dim=-1)
         return x
+
+    @torch.no_grad()
+    def generate(
+        self,
+        text: torch.Tensor,
+        max_response: int,
+        eos_token_id: int | None = None,
+        temperature: float = 1.0,
+        top_k: int | None = None,
+    ):
+        original_length = text.shape[0]
+        if text.dim() == 1:
+            text = text.unsqueeze(dim=0)
+        for _ in range(max_response):
+            x = text[:, -self.context_length:] if text.shape[-1] > self.context_length else text
+
+            y = self.forward(x)
+            # 1st batch, last predicted token
+            y = y[0, -1]
+            # apply temperature scaling
+            y = y / temperature
+            # apply top-k selection
+            if top_k:
+                y_topk = torch.topk(y, top_k, dim=-1).values
+                threshold = y_topk[-1]
+                y = y.masked_fill(y < threshold, float('-inf'))
+
+            y = softmax(y, dim=-1)
+            next_token_id = torch.multinomial(y, 1)
+
+            if eos_token_id != None and eos_token_id == next_token_id.item():
+                break
+            
+            text = torch.cat((text, next_token_id.unsqueeze(0)), dim=-1)
+
+        return text[0, original_length:]
