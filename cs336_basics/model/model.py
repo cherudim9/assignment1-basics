@@ -127,15 +127,15 @@ class Rope(nn.Module):
         max_seq_len: int,
         device: torch.device | None = None,
     ):
-        factory_kwargs = {"device": device}
         super().__init__()
         self.theta = theta
         self.d_k = d_k
         self.max_seq_len = max_seq_len
         assert self.d_k % 2 == 0
-        self.reset_parameters()
+        self.device = device
+        self.reset_parameters(device)
 
-    def reset_parameters(self):
+    def reset_parameters(self, device: str):
         r_even = []
         r_odd = []
         for i in range(self.max_seq_len):
@@ -147,8 +147,8 @@ class Rope(nn.Module):
                 b += [sin(theta_at_i_k), cos(theta_at_i_k)]
             r_even.append(a)
             r_odd.append(b)
-        self.register_buffer('r_even', torch.tensor(r_even), persistent=False)
-        self.register_buffer('r_odd', torch.tensor(r_odd), persistent=False)
+        self.register_buffer('r_even', torch.tensor(r_even, device=device), persistent=False)
+        self.register_buffer('r_odd', torch.tensor(r_odd, device=device), persistent=False)
 
     def forward(
         self,
@@ -172,10 +172,11 @@ def scaled_dot_product_attention(
     K: Float[Tensor, " ... keys d_k"],
     V: Float[Tensor, " ... values d_v"],
     mask: Float[Tensor, " ... queries keys"] | None = None,
+    device: str = 'cpu:0',
 ) -> Float[Tensor, " ... queries d_v"]:
     x = einsum(Q, K, "... queries d_k, ... keys d_k -> ... queries keys") / Q.shape[-1]**0.5
     if mask != None:
-        x = x + torch.where(mask, 0.0, -torch.inf)
+        x = x + torch.where(mask, 0.0, -torch.inf).to(device)
     x = softmax(x, dim=-1)
     x = einsum(x, V, "... queries keys_or_values, ... keys_or_values d_v -> ... queries d_v")
     return x
@@ -232,7 +233,7 @@ class MultiheadSelfAttention(nn.Module):
 
         mask = torch.tril(torch.full((q.shape[-2], q.shape[-2]), True))
 
-        ret = scaled_dot_product_attention(q, k, v, mask)
+        ret = scaled_dot_product_attention(q, k, v, mask, self.device)
         ret = rearrange(ret, "... num_heads sequence_length d_v -> ... sequence_length (num_heads d_v)")
         ret = self.w_o(ret)
 

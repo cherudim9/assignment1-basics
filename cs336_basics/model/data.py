@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 import numpy.typing as npt
 
 def get_batch(
@@ -6,10 +7,10 @@ def get_batch(
 ) -> tuple[torch.Tensor, torch.Tensor]:
     n = dataset.shape[0]
 
-    start_idx = torch.randint(high=n - context_length, size=(batch_size,), dtype=torch.int64, device=device)
-    start_idx = start_idx.unsqueeze(1)
+    start_idx = np.random.randint(low=0, high=n-context_length, size=(batch_size,), dtype=np.int64)
+    start_idx = np.expand_dims(start_idx, axis=1)
 
-    end_idx = torch.arange(context_length, dtype=torch.int32, device=device)
-    end_idx = end_idx.unsqueeze(0)
+    end_idx = np.arange(context_length, dtype=np.int32)
+    end_idx = np.expand_dims(end_idx, axis=0)
     
-    return (torch.Tensor(dataset[start_idx + end_idx]), torch.Tensor(dataset[(start_idx + 1) + end_idx]))
+    return (torch.tensor(dataset[start_idx + end_idx], dtype=torch.int32, device=device), torch.tensor(dataset[(start_idx + 1) + end_idx], dtype=torch.int32, device=device))
