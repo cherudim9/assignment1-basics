@@ -133,9 +133,9 @@ class Rope(nn.Module):
         self.max_seq_len = max_seq_len
         assert self.d_k % 2 == 0
         self.device = device
-        self.reset_parameters(device)
+        self.reset_parameters()
 
-    def reset_parameters(self, device: str):
+    def reset_parameters(self):
         r_even = []
         r_odd = []
         for i in range(self.max_seq_len):
@@ -147,8 +147,8 @@ class Rope(nn.Module):
                 b += [sin(theta_at_i_k), cos(theta_at_i_k)]
             r_even.append(a)
             r_odd.append(b)
-        self.register_buffer('r_even', torch.tensor(r_even, device=device), persistent=False)
-        self.register_buffer('r_odd', torch.tensor(r_odd, device=device), persistent=False)
+        self.register_buffer('r_even', torch.tensor(r_even, device=self.device), persistent=False)
+        self.register_buffer('r_odd', torch.tensor(r_odd, device=self.device), persistent=False)
 
     def forward(
         self,

@@ -171,7 +171,8 @@ def model_train(args):
         optimizer.zero_grad()
 
         if step_cnt % 100 == 0:
-            run_validation(model)
+            pass
+            # run_validation(model)
 
 
 if __name__ == "__main__":
