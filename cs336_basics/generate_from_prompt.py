@@ -38,7 +38,6 @@ def parse_args_extra():
     )
 
     parser.add_argument(
-        '-p',
         '--prompt',
         type=str,
         default='Just a short story: ',

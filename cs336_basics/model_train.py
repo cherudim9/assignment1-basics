@@ -163,13 +163,13 @@ def model_train(args: ArgumentParser):
         if step_cnt % 10 == 0:
             print(f'Step {step_cnt}: train loss = {train_loss: .6f}, learning rate = {current_lr: .10f}, token/s = {token_cnt / (time.time() - training_start_time): .2f}, calc_gradient_norm2={gradient_norm2}')
 
-        if step_cnt % 100 == 0:
+        if step_cnt % 200 == 0 or step_cnt + 1 == total_steps:
             valid_loss = run_validation(args, step_cnt, model, validation_data)
             wandb_log_dict["valid loss"] = valid_loss
         
         if wandb_enabled:
             wandb.log(wandb_log_dict)
-    
+
     model_path = Path(args.root_folder) / Path(args.model_folder)
     os.makedirs(model_path, exist_ok=True)
     model_dest_path = model_path / f"model-checkpoint-step-{total_steps}"
