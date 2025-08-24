@@ -17,7 +17,7 @@ from cs336_basics.model.optimizer import AdamW, get_lr_cosine_schedule
 from cs336_basics.model.serialization import load_checkpoint, save_checkpoint
 
 
-VALIDATION_PERCENTAGE = 0.1
+VALIDATION_PERCENTAGE = 0.05
 
 
 def read_dataset_from_np(path: str) -> npt.NDArray:
@@ -160,10 +160,10 @@ def model_train(args: ArgumentParser):
             "learning rate": current_lr,
             "gradient norm_2": gradient_norm2,}
 
-        if step_cnt % 25 == 0:
+        if step_cnt % 10 == 0:
             print(f'Step {step_cnt}: train loss = {train_loss: .6f}, learning rate = {current_lr: .10f}, token/s = {token_cnt / (time.time() - training_start_time): .2f}, calc_gradient_norm2={gradient_norm2}')
 
-        if step_cnt % 50 == 0:
+        if step_cnt % 100 == 0:
             valid_loss = run_validation(args, step_cnt, model, validation_data)
             wandb_log_dict["valid loss"] = valid_loss
         

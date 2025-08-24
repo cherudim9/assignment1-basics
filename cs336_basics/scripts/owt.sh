@@ -1,0 +1,17 @@
+uv run python3 cs336_basics/model_train.py \
+-p 'my_owt' \
+-r 'lr1e-3 bs128' \
+--root-folder /workspace/model \
+--model-folder lr1e3bs128 \
+--device cuda:0 \
+--training-dataset-path /workspace/data/owt_train-tokenized-local.npy \
+--validation-dataset-path /workspace/data/owt_valid-tokenized-local.npy \
+--vocab-size 32000 \
+--context-length 128 \
+--d-model 512 \
+--d-ff 1344 \
+--batch-size 256 \
+--num-tokens-processed 327680000 \
+--max-learning-rate '1e-3' \
+--min-learning-rate '1e-4' \
+--model-folder 'data/model_tiny_stories/lr1e2'
