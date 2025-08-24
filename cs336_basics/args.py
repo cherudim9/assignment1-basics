@@ -5,6 +5,26 @@ def get_parser(description: str):
     parser = argparse.ArgumentParser(description=description)
 
     parser.add_argument(
+        '-p',
+        '--wandb-project-name',
+        type=str,
+        default='tiny-stories-first',
+    )
+
+    parser.add_argument(
+        '-r',
+        '--wandb-run-name',
+        type=str,
+        default='',
+    )
+
+    parser.add_argument(
+        '--wandb-group-name',
+        type=str,
+        default='',
+    )
+
+    parser.add_argument(
         '--root-folder',
         type=str,
         default='/Users/haomin/Documents/CS336/assignment1-basics',
@@ -104,7 +124,7 @@ def get_parser(description: str):
     parser.add_argument(
         '--warmup-tiers',
         type=int,
-        default=0,
+        default=100,
     )
 
     parser.add_argument(

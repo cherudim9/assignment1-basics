@@ -1,11 +1,13 @@
 import argparse
 from argparse import ArgumentParser
+from collections.abc import Iterable
 import numpy as np
 import numpy.typing as npt
 import os
 from pathlib import Path
 import time
 import torch
+import wandb
 
 from cs336_basics.args import get_parser
 from cs336_basics.model.data import get_batch
@@ -38,7 +40,7 @@ def adjust_learning_rate(
     optimizer: torch.optim.Optimizer,
     total_steps: int,
     step_cnt: int
-):
+) -> float:
     current_lr = get_lr_cosine_schedule(
         it=step_cnt,
         max_learning_rate=float(args.max_learning_rate),
@@ -50,13 +52,23 @@ def adjust_learning_rate(
     for group in optimizer.param_groups:
         group['lr'] = current_lr
 
+    return current_lr
+
+
+def calc_gradient_norm2(parameters: Iterable[torch.nn.Parameter]) -> float:
+    norm2 = 0.0
+    for param in parameters:
+        if param.requires_grad:
+            norm2 += torch.sum(torch.square(param.grad))
+    return norm2 ** 0.5
+
 
 def run_validation(
     args: ArgumentParser,
     current_step: int,
     model: torch.nn.Module,
     dataset: npt.NDArray,
-):
+) -> float:
     start_time = time.time()
     total_steps = int(dataset.shape[0] * VALIDATION_PERCENTAGE) // (args.context_length * args.batch_size)
     losses = []
@@ -75,9 +87,17 @@ def run_validation(
     duration = time.time() - start_time
     processed_tokens = total_steps * args.batch_size * args.context_length
     print(f'validation loss at step {current_step}: {loss: .6f} (running time = {duration: .2f} seconds with {processed_tokens} tokens).')
+    return loss
 
 
 def model_train(args: ArgumentParser):
+    wandb_enabled = args.wandb_project_name != '' and args.wandb_run_name != ''
+    if wandb_enabled:
+        wandb.init(
+            project=args.wandb_project_name,
+            name=args.wandb_run_name,
+            group=args.wandb_group_name)
+
     model = TransformerLm(
         vocab_size=args.vocab_size,
         context_length=args.context_length,
@@ -110,7 +130,11 @@ def model_train(args: ArgumentParser):
     total_steps = args.num_tokens_processed // args.batch_size // args.context_length
     print(f'training total steps = {total_steps}')
 
+    training_start_time = time.time()
+    token_cnt = 0
+
     for step_cnt in range(total_steps):
+        current_step_start_time = time.time()
         features, label = get_batch(
             dataset=training_data,
             batch_size=args.batch_size,
@@ -120,16 +144,31 @@ def model_train(args: ArgumentParser):
         train_pred = model(features)
         train_loss = cross_entropy_loss(train_pred.view(-1, train_pred.size(-1)), label.view(-1))
         
-        adjust_learning_rate(args, optimizer, total_steps, step_cnt)
+        current_lr = adjust_learning_rate(args, optimizer, total_steps, step_cnt)
         train_loss.backward()
+        # gradient clipping?
+        gradient_norm2 = calc_gradient_norm2(model.parameters())
         optimizer.step()
         optimizer.zero_grad()
 
-        if step_cnt % 50 == 0:
-            print(f'Step {step_cnt}: train loss = {train_loss: .6f}, learning rate = {optimizer.param_groups[0]['lr']: .10f}')
+        token_cnt += features.shape[0] * features.shape[1]
+        wandb_log_dict = {
+            "train loss": train_loss,
+            "overall wallclock time": (time.time() - training_start_time),
+            "step wallclock time": (time.time() - current_step_start_time),
+            "tokens per second": token_cnt / (time.time() - training_start_time),
+            "learning rate": current_lr,
+            "gradient norm_2": gradient_norm2,}
 
-        if step_cnt % 100 == 0:
-            run_validation(args, step_cnt, model, validation_data)
+        if step_cnt % 25 == 0:
+            print(f'Step {step_cnt}: train loss = {train_loss: .6f}, learning rate = {current_lr: .10f}, token/s = {token_cnt / (time.time() - training_start_time): .2f}, calc_gradient_norm2={gradient_norm2}')
+
+        if step_cnt % 50 == 0:
+            valid_loss = run_validation(args, step_cnt, model, validation_data)
+            wandb_log_dict["valid loss"] = valid_loss
+        
+        if wandb_enabled:
+            wandb.log(wandb_log_dict)
     
     model_path = Path(args.root_folder) / Path(args.model_folder)
     os.makedirs(model_path, exist_ok=True)
@@ -144,5 +183,7 @@ def model_train(args: ArgumentParser):
 
 if __name__ == "__main__":
     args = get_parser("basic model trainier").parse_args()
+
+    print(args)
 
     model_train(args)
