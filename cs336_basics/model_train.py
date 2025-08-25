@@ -12,7 +12,7 @@ import wandb
 from cs336_basics.args import get_parser
 from cs336_basics.model.data import get_batch
 from cs336_basics.model.model import TransformerLm
-from cs336_basics.model.nn_utils import cross_entropy_loss
+from cs336_basics.model.nn_utils import cross_entropy_loss, gradient_clipping
 from cs336_basics.model.optimizer import AdamW, get_lr_cosine_schedule
 from cs336_basics.model.serialization import load_checkpoint, save_checkpoint
 
@@ -147,6 +147,7 @@ def model_train(args: ArgumentParser):
         current_lr = adjust_learning_rate(args, optimizer, total_steps, step_cnt)
         train_loss.backward()
         # gradient clipping?
+        gradient_clipping(model.parameters(), 1.0)
         gradient_norm2 = calc_gradient_norm2(model.parameters())
         optimizer.step()
         optimizer.zero_grad()

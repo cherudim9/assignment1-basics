@@ -266,3 +266,92 @@ uv run python3 cs336_basics/model_train.py \
 --num-tokens-processed 16384000 \
 --max-learning-rate '2.5e-3' \
 --min-learning-rate '2.5e-4'
+
+
+
+uv run python3 cs336_basics/model_train.py \
+-p 'my_owt' \
+-r 'full - lr2.5e-3 bs128 cl192' \
+--root-folder /workspace/model \
+--model-folder lr25e3bs128cl192 \
+--device cuda:0 \
+--training-dataset-path /workspace/data/owt_train-tokenized-local.npy \
+--validation-dataset-path /workspace/data/owt_valid-tokenized-local.npy \
+--vocab-size 32000 \
+--context-length 192 \
+--d-model 512 \
+--d-ff 1344 \
+--batch-size 128 \
+--num-tokens-processed 80000000 \
+--max-learning-rate '2.5e-3' \
+--min-learning-rate '2.5e-4'
+
+
+uv run python3 cs336_basics/model_train.py \
+-p 'my_owt' \
+-r 'full2 - lr2.5e-3 bs192 cl60' \
+--root-folder /workspace/model \
+--model-folder lr25e3bs192cl160 \
+--device cuda:0 \
+--training-dataset-path /workspace/data/owt_train-tokenized-local.npy \
+--validation-dataset-path /workspace/data/owt_valid-tokenized-local.npy \
+--vocab-size 32000 \
+--context-length 160 \
+--d-model 512 \
+--d-ff 1344 \
+--batch-size 192 \
+--num-tokens-processed 80000000 \
+--max-learning-rate '2.5e-3' \
+--min-learning-rate '2.5e-4'
+
+uv run python3 cs336_basics/model_train.py \
+-p 'my_owt' \
+-r 'full - lr2.5e-3 bs256 c128' \
+--root-folder /workspace/model \
+--model-folder lr25e3bs256cl128full \
+--device cuda:0 \
+--training-dataset-path /workspace/data/owt_train-tokenized-local.npy \
+--validation-dataset-path /workspace/data/owt_valid-tokenized-local.npy \
+--vocab-size 32000 \
+--context-length 128 \
+--d-model 512 \
+--d-ff 1344 \
+--batch-size 256 \
+--num-tokens-processed 100000000 \
+--max-learning-rate '2.5e-3' \
+--min-learning-rate '2.5e-4'
+
+uv run python3 cs336_basics/model_train.py \
+-p 'my_owt' \
+-r 'full - lr2.5e-3 to 1.25e-3 bs256 c128' \
+--root-folder /workspace/model \
+--model-folder lr25e3to1.25e3bs256cl128full \
+--device cuda:0 \
+--training-dataset-path /workspace/data/owt_train-tokenized-local.npy \
+--validation-dataset-path /workspace/data/owt_valid-tokenized-local.npy \
+--vocab-size 32000 \
+--context-length 128 \
+--d-model 512 \
+--d-ff 1344 \
+--batch-size 256 \
+--num-tokens-processed 110000000 \
+--max-learning-rate '2.5e-3' \
+--min-learning-rate '1.25e-3'
+
+
+uv run python3 cs336_basics/model_train.py \
+-p 'my_owt' \
+-r 'full - lr7.5e-3 bs256 c128' \
+--root-folder /workspace/model \
+--model-folder lr75e3bs256cl128full \
+--device cuda:0 \
+--training-dataset-path /workspace/data/owt_train-tokenized-local.npy \
+--validation-dataset-path /workspace/data/owt_valid-tokenized-local.npy \
+--vocab-size 32000 \
+--context-length 128 \
+--d-model 512 \
+--d-ff 1344 \
+--batch-size 256 \
+--num-tokens-processed 110000000 \
+--max-learning-rate '7.5e-3' \
+--min-learning-rate '7.5e-4'

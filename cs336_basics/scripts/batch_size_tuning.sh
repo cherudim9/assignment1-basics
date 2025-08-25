@@ -24,3 +24,12 @@ uv run python3 cs336_basics/model_train.py \
 -r 'batch-size-64' \
 --model-folder \
 'data/model_tiny_stories/bs64'
+
+
+uv run python3 cs336_basics/model_train.py \
+--max-learning-rate '1e-1' \
+--min-learning-rate '1e-2' \
+--batch-size 64 \
+-r 'gradient-clipping' \
+--model-folder \
+'data/model_tiny_stories/gradient'
