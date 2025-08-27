@@ -109,8 +109,9 @@ def model_train(args: ArgumentParser):
         device=args.device,
     )
 
-    if args.device == 'mps':
-        model = torch.compile(model, backend="aot_eager")
+    if args.device == 'cuda:0':
+        print('compiling model with JIT...')
+        model = torch.compile(model)
 
     display_model_info(model)
 
