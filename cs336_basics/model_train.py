@@ -110,6 +110,7 @@ def model_train(args: ArgumentParser):
     )
 
     if args.device == 'cuda:0':
+        model = model.to(args.device)
         print('compiling model with JIT...')
         model = torch.compile(model)
 
