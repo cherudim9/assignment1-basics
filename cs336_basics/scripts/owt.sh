@@ -383,7 +383,7 @@ uv run python3 cs336_basics/model_train.py \
 
 uv run python3 cs336_basics/model_train.py \
 -p 'my_owt' \
--r 'new: big model2' \
+-r 'new: big model2 (compiled)' \
 --root-folder /workspace/model \
 --model-folder bigmodel2 \
 --device cuda:0 \
