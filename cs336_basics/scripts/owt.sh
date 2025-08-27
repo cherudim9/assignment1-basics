@@ -341,9 +341,9 @@ uv run python3 cs336_basics/model_train.py \
 
 uv run python3 cs336_basics/model_train.py \
 -p 'my_owt' \
--r 'full - lr7.5e-3 bs256 c128' \
+-r 'full - lr1e-3 bs256 c128 wt600' \
 --root-folder /workspace/model \
---model-folder lr75e3bs256cl128full \
+--model-folder lr1e3bs256cl128wt600 \
 --device cuda:0 \
 --training-dataset-path /workspace/data/owt_train-tokenized-local.npy \
 --validation-dataset-path /workspace/data/owt_valid-tokenized-local.npy \
@@ -353,5 +353,50 @@ uv run python3 cs336_basics/model_train.py \
 --d-ff 1344 \
 --batch-size 256 \
 --num-tokens-processed 110000000 \
---max-learning-rate '7.5e-3' \
---min-learning-rate '7.5e-4'
+--max-learning-rate '1e-3' \
+--min-learning-rate '1e-4' \
+--warmup-tiers 600
+
+
+
+uv run python3 cs336_basics/model_train.py \
+-p 'my_owt' \
+-r 'full - lr2.5e-3 bs256 c128 wt1000' \
+--root-folder /workspace/model \
+--model-folder lr25e3bs256cl128wt1000 \
+--device cuda:0 \
+--training-dataset-path /workspace/data/owt_train-tokenized-local.npy \
+--validation-dataset-path /workspace/data/owt_valid-tokenized-local.npy \
+--vocab-size 32000 \
+--context-length 128 \
+--d-model 512 \
+--d-ff 1344 \
+--batch-size 256 \
+--num-tokens-processed 110000000 \
+--max-learning-rate '2.5e-3' \
+--min-learning-rate '2.5e-4' \
+--warmup-tiers 1000
+
+
+
+# new tuning!
+
+uv run python3 cs336_basics/model_train.py \
+-p 'my_owt' \
+-r 'new: big model2' \
+--root-folder /workspace/model \
+--model-folder bigmodel2 \
+--device cuda:0 \
+--training-dataset-path /workspace/data/owt_train-tokenized-local.npy \
+--validation-dataset-path /workspace/data/owt_valid-tokenized-local.npy \
+--vocab-size 32000 \
+--context-length 128 \
+--num-layers 8 \
+--num-heads 8 \
+--d-model 512 \
+--d-ff 1344 \
+--batch-size 128 \
+--num-tokens-processed 330000000 \
+--max-learning-rate '1e-3' \
+--min-learning-rate '5e-4' \
+--warmup-tiers 5000

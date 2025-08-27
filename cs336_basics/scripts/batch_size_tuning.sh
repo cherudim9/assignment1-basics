@@ -33,3 +33,11 @@ uv run python3 cs336_basics/model_train.py \
 -r 'gradient-clipping' \
 --model-folder \
 'data/model_tiny_stories/gradient'
+
+time uv run python3 cs336_basics/model_train.py \
+--max-learning-rate '1e-3' \
+--min-learning-rate '1e-4' \
+--num-tokens-processed 80000 \
+--batch-size 64 \
+--model-folder \
+'data/model_tiny_stories/test-gpu'
