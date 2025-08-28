@@ -143,11 +143,13 @@ def model_train(args: ArgumentParser):
             context_length=args.context_length,
             device=args.device)
 
-        train_pred = model(features)
+        with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+            train_pred = model(features)
         train_loss = cross_entropy_loss(train_pred.view(-1, train_pred.size(-1)), label.view(-1))
         
         current_lr = adjust_learning_rate(args, optimizer, total_steps, step_cnt)
-        train_loss.backward()
+        with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+            train_loss.backward()
         # gradient clipping?
         gradient_clipping(model.parameters(), 1.0)
         gradient_norm2 = calc_gradient_norm2(model.parameters())
