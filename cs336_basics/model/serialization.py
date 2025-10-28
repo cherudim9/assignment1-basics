@@ -20,6 +20,9 @@ def load_checkpoint(
     optimizer: torch.optim.Optimizer | None,
 ) -> int:
     d = torch.load(src, map_location=torch.device('cpu'))
+
+    d['model'] = {k.replace('_orig_mod.', '') : v for k, v in d['model'].items()}
+
     model.load_state_dict(d['model'])
     if optimizer is not None:
         optimizer.load_state_dict(d['optimizer'])

@@ -383,20 +383,20 @@ uv run python3 cs336_basics/model_train.py \
 
 uv run python3 cs336_basics/model_train.py \
 -p 'my_owt' \
--r 'new: big model2 cl512 (compiled)' \
+-r '[KV]new: big model2 cl512 bs64 (compiled)' \
 --root-folder /workspace/model \
---model-folder bigmodel2 \
+--model-folder kvcache_bigmodel2_cl512_bs64 \
 --device cuda:0 \
---training-dataset-path /workspace/data/owt_train-tokenized-local.npy \
---validation-dataset-path /workspace/data/owt_valid-tokenized-local.npy \
+--training-dataset-path /workspace/assignment1-basics/data/owt_train-tokenized.npy \
+--validation-dataset-path /workspace/assignment1-basics/data/owt_valid-tokenized.npy \
 --vocab-size 32000 \
---context-length 256 \
---num-layers 8 \
+--context-length 512 \
+--num-layers 4 \
 --num-heads 8 \
---d-model 1024 \
---d-ff 2688 \
---batch-size 128 \
---num-tokens-processed 330000000 \
+--d-model 512 \
+--d-ff 1344 \
+--batch-size 64 \
+--num-tokens-processed 1000000000 \
 --max-learning-rate '2.5e-3' \
 --min-learning-rate '2.5e-4' \
 --warmup-tiers 3000
