@@ -64,6 +64,18 @@ def parse_args_extra():
         default=None,
     )
 
+    parser.add_argument(
+        '--seed',
+        type=int,
+        default=42,
+    )
+
+    parser.add_argument(
+        '--enable-kv-cache',
+        action='store_true',
+        default=False,
+    )
+
     return  parser.parse_args()
 
 
@@ -107,16 +119,22 @@ if __name__ == '__main__':
     input_tokens = tokenizer.encode(args.prompt)
     eos_token_id = tokenizer.encode('<|endoftext|>')[0]
 
-    print(input_tokens)
+    print(f'input tokens = {input_tokens}')
+
+    rng = torch.Generator(args.device)
+    rng.manual_seed(args.seed)
     
     resp = model.generate(
         text=torch.tensor(input_tokens, device=args.device),
         max_response=args.max_response,
         eos_token_id=eos_token_id,
         temperature=args.generate_temperature,
-        top_k=args.generate_top_k)
+        top_k=args.generate_top_k,
+        rng=rng,
+        enable_kv_cache=args.enable_kv_cache)
 
     print(f'generated {resp.shape[-1]} tokens.\n')
+    print(f'resp={resp}')
     print('-' * 40 + ' prompt ' + '-' * 40)
     print(args.prompt)
     print('+' * 88)

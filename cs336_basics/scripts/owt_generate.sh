@@ -1,0 +1,14 @@
+time  uv run python3 cs336_basics/generate_from_prompt.py \
+--root-folder /Users/haomin \
+--vocab-size 32000 \
+--context-length 512 \
+--num-layers 4 \
+--num-heads 8 \
+--d-model 512 \
+--d-ff 1344 \
+--vocab-path /Users/haomin/Documents/CS336/assignment1-basics/data/owt_train_vocab.txt \
+--merges-path /Users/haomin/Documents/CS336/assignment1-basics/data/owt_train_merges.txt \
+--model-checkpoint "Downloads/model-checkpoint-step-30517" \
+--prompt "A joke" \
+-t 0.8 -k 1000 \
+--enable-kv-cache

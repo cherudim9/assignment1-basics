@@ -8,6 +8,51 @@ from math import sin, cos
 from cs336_basics.model.nn_utils import silu, softmax
 
 
+class KvCache:
+    def __init__(
+            self,
+            num_layers: int, 
+            batch_size: int,
+            num_heads: int,
+            init_seq_len: int,
+            head_dim: int):
+        self.kv_shape = (num_layers, 2, batch_size, num_heads, init_seq_len, head_dim)
+        self.cache = None
+        self.len = 0
+
+    def reset(self):
+        self.len = 0
+
+    def insert_kv(self, layer_idx, k, v):
+        add_t = k.shape[2]
+        t0 = self.len
+        t1 = self.len + add_t
+
+        if self.cache is None:
+            self.cache = torch.empty(self.kv_shape, dtype=k.dtype, device=k.device)
+
+        if t1 > self.cache.shape[4]:
+            new_seq_len = t1
+            new_seq_len = ((new_seq_len - 1) // 16 + 1) * 16
+
+            new_shape = list(self.cache.shape)
+            new_shape[4] = new_seq_len
+            self.cache.resize_(new_shape)
+            # new_shape[4] = new_seq_len - self.cache.shape[4]
+            # new_cache = torch.empty(tuple(new_shape), dtype=k.dtype, device=k.device)
+            # self.cache = torch.concat([self.cache, new_cache], dim=-2)
+
+        self.cache[layer_idx, 0, :, :, t0:t1] = k
+        self.cache[layer_idx, 1, :, :, t0:t1] = v
+
+        if layer_idx == self.kv_shape[0] - 1:
+            self.len += add_t
+
+        q_view = self.cache[layer_idx, 0, :, :, :t1]
+        v_view = self.cache[layer_idx, 1, :, :, :t1]
+        return q_view, v_view
+
+
 class Linear(nn.Module):
     def __init__(
         self, 
@@ -154,7 +199,7 @@ class Rope(nn.Module):
         self,
         x: torch.Tensor, token_positions: torch.Tensor
     ) -> torch.Tensor:
-        token_positions = token_positions - torch.min(token_positions, dim = -1).values
+        # token_positions = token_positions - torch.min(token_positions, dim = -1).values
         r_even = self.r_even[token_positions]
         r_odd = self.r_odd[token_positions]
 
@@ -185,6 +230,7 @@ def scaled_dot_product_attention(
 class MultiheadSelfAttention(nn.Module):
     def __init__(
         self,
+        layer_idx: int,
         d_model: int,
         num_heads: int,
         rope: Rope | None = None,
@@ -193,6 +239,7 @@ class MultiheadSelfAttention(nn.Module):
     ):
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
+        self.layer_idx = layer_idx
         self.d_model = d_model
         self.num_heads = num_heads
         self.d_k = d_model // num_heads
@@ -214,24 +261,37 @@ class MultiheadSelfAttention(nn.Module):
         self,
         x: torch.Tensor,
         token_positions: Int[Tensor, " ... sequence_length"] | None = None,
+        kv_cache: KvCache = None,
     ) -> torch.Tensor:
         if token_positions is None:
-            token_positions = torch.arange(x.shape[-2], device=self.device)
+            cur_seq_len = x.shape[-2]
+            if kv_cache is not None:
+                cur_seq_len += kv_cache.len
+            token_positions = torch.arange(cur_seq_len, device=self.device)
 
         q = self.w_q(x)
         q = rearrange(q, "... sequence_length (num_heads d_k) -> ... num_heads sequence_length d_k", num_heads=self.num_heads, d_k =self.d_k)
-        if token_positions != None and self.rope != None:
-            q = self.rope(q, token_positions)
 
         k = self.w_k(x)
         k= rearrange(k, "... sequence_length (num_heads d_k) -> ... num_heads sequence_length d_k", num_heads=self.num_heads, d_k =self.d_k)
-        if token_positions != None and self.rope != None:
-            k = self.rope(k, token_positions)
+
+        if token_positions is not None and self.rope is not None:
+            if kv_cache is not None and q.shape[-2] == 1:
+                q = self.rope(q, token_positions[-1:])
+                k = self.rope(k, token_positions[-1:])
+            else:
+                q = self.rope(q, token_positions)
+                k = self.rope(k, token_positions)
 
         v = self.w_v(x)
         v = rearrange(v, "... sequence_length (num_heads d_v) -> ... num_heads sequence_length d_v", num_heads=self.num_heads, d_v =self.d_v)
 
-        mask = torch.tril(torch.full((q.shape[-2], q.shape[-2]), True))
+        if kv_cache is not None:
+            k, v = kv_cache.insert_kv(self.layer_idx, k, v)
+        
+        mask = None
+        if kv_cache is None or q.shape[-2] != 1:
+            mask = torch.tril(torch.full((q.shape[-2], q.shape[-2]), True))
 
         ret = scaled_dot_product_attention(q, k, v, mask, self.device)
         ret = rearrange(ret, "... num_heads sequence_length d_v -> ... sequence_length (num_heads d_v)")
@@ -243,6 +303,7 @@ class MultiheadSelfAttention(nn.Module):
 class TransformerBlock(nn.Module):
     def __init__(
         self,
+        layer_idx: int,
         d_model: int,
         num_heads: int,
         d_ff: int,
@@ -253,7 +314,7 @@ class TransformerBlock(nn.Module):
     ):
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
-        self.mha = MultiheadSelfAttention(d_model=d_model, num_heads=num_heads, rope=rope, **factory_kwargs)
+        self.mha = MultiheadSelfAttention(layer_idx=layer_idx, d_model=d_model, num_heads=num_heads, rope=rope, **factory_kwargs)
         self.ffn = Swiglu(d_model=d_model, d_ff=d_ff, **factory_kwargs)
         self.rms1 = RmsNorm(d_model=d_model, eps=eps, **factory_kwargs)
         self.rms2 = RmsNorm(d_model=d_model, eps=eps, **factory_kwargs)
@@ -262,8 +323,9 @@ class TransformerBlock(nn.Module):
         self,
         x: torch.Tensor,
         token_positions: Int[Tensor, " ... sequence_length"] | None = None,
+        kv_cache: KvCache = None,
     ) -> torch.Tensor:
-        x = x + self.mha(self.rms1(x), token_positions)
+        x = x + self.mha(self.rms1(x), token_positions, kv_cache)
         x = x + self.ffn(self.rms2(x))
         return x
     
@@ -304,6 +366,7 @@ class TransformerLm(nn.Module):
         self.layers = nn.ModuleList(
             [
                 TransformerBlock(
+                    layer_idx=layer_idx,
                     d_model=d_model,
                     num_heads=num_heads,
                     d_ff=d_ff,
@@ -311,7 +374,7 @@ class TransformerLm(nn.Module):
                     rope=self.rope,
                     **factory_kwargs,
                 )
-                for _ in range(num_layers)
+                for layer_idx in range(num_layers)
             ]
         )
 
@@ -321,13 +384,34 @@ class TransformerLm(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
+        kv_cache: KvCache = None,
     ) -> torch.Tensor:
         x = self.embedding_layer(x)
         for transformer_block in self.layers:
-            x = transformer_block(x)
+            x = transformer_block(x, kv_cache=kv_cache)
         x = self.norm_layer(x)
         x = self.linear_layer(x)
         return x
+    
+    def sample_next_token(
+        self,
+        y: torch.Tensor,
+        temperature: float = 1.0,
+        top_k: int | None = None,
+        rng: torch.Generator = None,
+    ):
+        # 1st batch, last predicted token
+        y = y[0, -1]
+        # apply temperature scaling
+        y = y / temperature
+        # apply top-k selection
+        if top_k:
+            y_topk = torch.topk(y, top_k, dim=-1).values
+            threshold = y_topk[-1]
+            y = y.masked_fill(y < threshold, float('-inf'))
+
+        y = softmax(y, dim=-1)
+        return torch.multinomial(y, 1, generator = rng)
 
     @torch.no_grad()
     def generate(
@@ -337,26 +421,39 @@ class TransformerLm(nn.Module):
         eos_token_id: int | None = None,
         temperature: float = 1.0,
         top_k: int | None = None,
+        rng: torch.Generator = None,
+        enable_kv_cache: bool = False,
     ):
         original_length = text.shape[0]
         if text.dim() == 1:
             text = text.unsqueeze(dim=0)
-        for _ in range(max_response):
+
+        kv_cache = None
+        if enable_kv_cache:
+            kv_cache = KvCache(
+                num_layers=self.num_layers,
+                batch_size=1,
+                num_heads=self.num_heads,
+                init_seq_len=1,
+                head_dim=self.d_model // self.num_heads,
+            )
+
             x = text[:, -self.context_length:] if text.shape[-1] > self.context_length else text
+            y = self.forward(x, kv_cache)
 
-            y = self.forward(x)
-            # 1st batch, last predicted token
-            y = y[0, -1]
-            # apply temperature scaling
-            y = y / temperature
-            # apply top-k selection
-            if top_k:
-                y_topk = torch.topk(y, top_k, dim=-1).values
-                threshold = y_topk[-1]
-                y = y.masked_fill(y < threshold, float('-inf'))
+            next_token_id = self.sample_next_token(y, temperature, top_k, rng)
+            text = torch.cat((text, next_token_id.unsqueeze(0)), dim=-1)
+            max_response = max_response - 1
 
-            y = softmax(y, dim=-1)
-            next_token_id = torch.multinomial(y, 1)
+        for _ in range(max_response):
+            if enable_kv_cache:
+                x = text[:, -1:]
+            else:
+                x = text[:, -self.context_length:] if text.shape[-1] > self.context_length else text
+
+            y = self.forward(x, kv_cache)
+            
+            next_token_id = self.sample_next_token(y, temperature, top_k, rng)
 
             if eos_token_id != None and eos_token_id == next_token_id.item():
                 break
